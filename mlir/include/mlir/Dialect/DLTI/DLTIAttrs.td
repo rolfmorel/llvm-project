@@ -10,6 +10,7 @@
 #define MLIR_DIALECT_DLTI_DLTIATTRS_TD
 
 include "mlir/Dialect/DLTI/DLTI.td"
+include "mlir/Interfaces/DataLayoutInterfaces.td"
 include "mlir/IR/AttrTypeBase.td"
 
 class DLTIAttr<string name, list<Trait> traits = [],
@@ -20,13 +21,8 @@ class DLTIAttr<string name, list<Trait> traits = [],
 // DataLayoutEntryAttr
 //===----------------------------------------------------------------------===//
 
-def DataLayoutEntryTrait
-    : NativeAttrTrait<"DataLayoutEntryInterface::Trait"> {
-  let cppNamespace = "::mlir";
-}
-
 def DLTI_DataLayoutEntryAttr :
-    DLTIAttr<"DataLayoutEntry", [DataLayoutEntryTrait]> {
+    DLTIAttr<"DataLayoutEntry", [DataLayoutEntryInterface]> {
   let summary = "An attribute to represent an entry of a data layout specification.";
   let description = [{
     A data layout entry attribute is a key-value pair where the key is a type or
@@ -53,13 +49,9 @@ def DLTI_DataLayoutEntryAttr :
 //===----------------------------------------------------------------------===//
 // DataLayoutSpecAttr
 //===----------------------------------------------------------------------===//
-def DataLayoutSpecTrait
-    : NativeAttrTrait<"DataLayoutSpecInterface::Trait"> {
-  let cppNamespace = "::mlir";
-}
 
 def DLTI_DataLayoutSpecAttr :
-    DLTIAttr<"DataLayoutSpec", [DataLayoutSpecTrait]> {
+    DLTIAttr<"DataLayoutSpec", [DataLayoutSpecInterface]> {
   let summary = "An attribute to represent a data layout specification.";
   let description = [{
     A data layout specification is a list of entries that specify (partial) data
@@ -78,7 +70,7 @@ def DLTI_DataLayoutSpecAttr :
     /// same key as the newer entries if the entries are compatible. Returns null
     /// if the specifications are not compatible.
     DataLayoutSpecAttr combineWith(ArrayRef<DataLayoutSpecInterface> specs) const;
-  
+
     /// Returns the endiannes identifier.
     StringAttr getEndiannessIdentifier(MLIRContext *context) const;
 
@@ -93,6 +85,54 @@ def DLTI_DataLayoutSpecAttr :
 
     /// Returns the stack alignment identifier.
     StringAttr getStackAlignmentIdentifier(MLIRContext *context) const;
+
+    /// Returns the attribute associated with the key.
+    FailureOr<Attribute> query(DataLayoutEntryKey key) {
+      return llvm::cast<mlir::DataLayoutSpecInterface>(*this).queryHelper(key);
+    }
+  }];
+}
+
+def DLTI_MapAttr : DLTIAttr<"Map", [DLTIQueryInterface]> {
+  let summary = "A mapping of DLTI-information by way of key-value pairs";
+  let description = [{
+    A data layout and target information map is a list of entries is
+    effectively a dictionary mapping DLTI-related keys to DLTI-related values.
+
+    Its main purpose is to facilate querying IR for arbitrary DLTI-related
+    key-value associations. Note that facility functions exist to perform
+    nested lookups on nested DLTI map attributes.
+
+    Consider the following shallow usage of a DLTI-map
+    ```
+    #dlti.map<#dlti.dl_entry<"CPU::cache::L1::size_in_bytes", 65536 : i32>>
+    ```
+    versus nested maps, which make it possible to obtain sub-dictionaries of
+    related information (with the following example making use of other
+    attributes that also implement the `DLTIQueryInterface`):
+    ```
+    #dlti.target_system_spec<"CPU":
+      #dlti.target_device_spec<#dlti.dl_entry<"cache",
+        #dlti.map<#dlti.dl_entry<"L1",
+          #dlti.map<#dlti.dl_entry<"size_in_bytes", 65536 : i32>>,
+                  #dlti.dl_entry<"L1d",
+          #dlti.map<#dlti.dl_entry<"size_in_bytes", 32768 : i32>> >>>>
+    ```
+   }];
+  let parameters = (ins
+    ArrayRefParameter<"DataLayoutEntryInterface", "">:$entries
+  );
+  let mnemonic = "map";
+  let genVerifyDecl = 1;
+  let assemblyFormat = "`<` $entries `>`";
+  let extraClassDeclaration = [{
+    /// Returns the attribute associated with the key.
+    FailureOr<Attribute> query(DataLayoutEntryKey key) {
+      for (DataLayoutEntryInterface entry : getEntries())
+        if (entry.getKey() == key)
+            return entry.getValue();
+      return ::mlir::failure();
+    }
   }];
 }
 
@@ -100,13 +140,8 @@ def DLTI_DataLayoutSpecAttr :
 // TargetSystemSpecAttr
 //===----------------------------------------------------------------------===//
 
-def TargetSystemSpecTrait
-    : NativeAttrTrait<"TargetSystemSpecInterface::Trait"> {
-  let cppNamespace = "::mlir";
-}
-
 def DLTI_TargetSystemSpecAttr :
-    DLTIAttr<"TargetSystemSpec", [TargetSystemSpecTrait]> {
+    DLTIAttr<"TargetSystemSpec", [TargetSystemSpecInterface]> {
   let summary = "An attribute to represent target system specification.";
   let description = [{
     A system specification describes the overall system containing
@@ -136,6 +171,11 @@ def DLTI_TargetSystemSpecAttr :
     std::optional<TargetDeviceSpecInterface>
     getDeviceSpecForDeviceID(
       TargetSystemSpecInterface::DeviceID deviceID);
+
+    /// Returns the attribute associated with the key.
+    FailureOr<Attribute> query(DataLayoutEntryKey key) const {
+      return llvm::cast<mlir::TargetSystemSpecInterface>(*this).queryHelper(key);
+    }
   }];
   let extraClassDefinition = [{
     std::optional<TargetDeviceSpecInterface>
@@ -154,13 +194,8 @@ def DLTI_TargetSystemSpecAttr :
 // TargetDeviceSpecAttr
 //===----------------------------------------------------------------------===//
 
-def TargetDeviceSpecTrait
-    : NativeAttrTrait<"TargetDeviceSpecInterface::Trait"> {
-  let cppNamespace = "::mlir";
-}
-
 def DLTI_TargetDeviceSpecAttr :
-    DLTIAttr<"TargetDeviceSpec", [TargetDeviceSpecTrait]> {
+    DLTIAttr<"TargetDeviceSpec", [TargetDeviceSpecInterface]> {
   let summary = "An attribute to represent target device specification.";
   let description = [{
     Each device specification describes a single device and its
@@ -179,6 +214,13 @@ def DLTI_TargetDeviceSpecAttr :
   let mnemonic = "target_device_spec";
   let genVerifyDecl = 1;
   let assemblyFormat = "`<` $entries `>`";
+
+  let extraClassDeclaration = [{
+    /// Returns the attribute associated with the key.
+    FailureOr<Attribute> query(DataLayoutEntryKey key) const {
+      return llvm::cast<mlir::TargetDeviceSpecInterface>(*this).queryHelper(key);
+    }
+  }];
 }
 
 #endif  // MLIR_DIALECT_DLTI_DLTIATTRS_TD

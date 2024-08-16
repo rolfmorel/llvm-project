@@ -109,12 +109,11 @@ void DataLayoutEntryAttr::print(AsmPrinter &os) const {
 }
 
 //===----------------------------------------------------------------------===//
-// DataLayoutSpecAttr
+// DLTIMapAttr
 //===----------------------------------------------------------------------===//
 
-LogicalResult
-DataLayoutSpecAttr::verify(function_ref<InFlightDiagnostic()> emitError,
-                           ArrayRef<DataLayoutEntryInterface> entries) {
+static LogicalResult verifyEntries(function_ref<InFlightDiagnostic()> emitError,
+                                   ArrayRef<DataLayoutEntryInterface> entries) {
   DenseSet<Type> types;
   DenseSet<StringAttr> ids;
   for (DataLayoutEntryInterface entry : entries) {
@@ -128,6 +127,21 @@ DataLayoutSpecAttr::verify(function_ref<InFlightDiagnostic()> emitError,
     }
   }
   return success();
+}
+
+LogicalResult MapAttr::verify(function_ref<InFlightDiagnostic()> emitError,
+                              ArrayRef<DataLayoutEntryInterface> entries) {
+  return verifyEntries(emitError, entries);
+}
+
+//===----------------------------------------------------------------------===//
+// DataLayoutSpecAttr
+//===----------------------------------------------------------------------===//
+
+LogicalResult
+DataLayoutSpecAttr::verify(function_ref<InFlightDiagnostic()> emitError,
+                           ArrayRef<DataLayoutEntryInterface> entries) {
+  return verifyEntries(emitError, entries);
 }
 
 /// Given a list of old and a list of new entries, overwrites old entries with
@@ -393,6 +407,49 @@ TargetSystemSpecAttr::verify(function_ref<InFlightDiagnostic()> emitError,
 // DLTIDialect
 //===----------------------------------------------------------------------===//
 
+std::pair<DLTIQueryInterface, Operation *>
+dlti::getClosestQueryable(Operation *op) {
+  DLTIQueryInterface queryable = {};
+
+  // Search op and its ancestors for the first attached DLTIQueryInterface attr.
+  do {
+    for (NamedAttribute attr : op->getAttrs())
+      if ((queryable = llvm::dyn_cast<DLTIQueryInterface>(attr.getValue())))
+        break;
+  } while (!queryable && (op = op->getParentOp()));
+
+  return std::pair(queryable, op);
+}
+
+FailureOr<Attribute> dlti::query(Operation *op, ArrayRef<StringAttr> keys,
+                                 InFlightDiagnostic *diag) {
+  auto [queryable, queryOp] = dlti::getClosestQueryable(op);
+
+#define FAIL(message)                                                          \
+  (diag ? ((diag->attachNote(op->getLoc()) << "target op for DLTI query"),     \
+           (diag->attachNote((queryOp ? queryOp : op)->getLoc()) << message))  \
+        : failure())
+
+  if (!queryable)
+    return FAIL("no DLTI-queryable attrs on target op or any of its ancestors");
+
+  Attribute currentAttr = queryable;
+  for (auto &&[idx, key] : llvm::enumerate(keys)) {
+    if (auto map = llvm::dyn_cast<DLTIQueryInterface>(currentAttr)) {
+      auto maybeAttr = map.query(key);
+      if (failed(maybeAttr))
+        return FAIL("key " << key << " has no DLTI-mapping per attr: " << map);
+      currentAttr = *maybeAttr;
+    } else {
+      return FAIL("got non-DLTI-queryable attribute upon looking up keys ["
+                  << keys.take_front(idx) << "] at op");
+    }
+  }
+
+  return currentAttr;
+#undef FAIL
+}
+
 DataLayoutSpecInterface dlti::getDataLayoutSpec(Operation *op) {
   DataLayoutSpecInterface dlSpec = nullptr;
 
@@ -480,11 +537,21 @@ LogicalResult DLTIDialect::verifyOperationAttribute(Operation *op,
     if (isa<ModuleOp>(op))
       return detail::verifyDataLayoutOp(op);
     return success();
-  } else if (attr.getName() == DLTIDialect::kTargetSystemDescAttrName) {
+  }
+
+  if (attr.getName() == DLTIDialect::kTargetSystemDescAttrName) {
     if (!llvm::isa<TargetSystemSpecAttr>(attr.getValue())) {
       return op->emitError()
              << "'" << DLTIDialect::kTargetSystemDescAttrName
              << "' is expected to be a #dlti.target_system_spec attribute";
+    }
+    return success();
+  }
+
+  if (attr.getName() == DLTIDialect::kMapAttrName) {
+    if (!llvm::isa<MapAttr>(attr.getValue())) {
+      return op->emitError() << "'" << DLTIDialect::kMapAttrName
+                             << "' is expected to be a #dlti.map attribute";
     }
     return success();
   }

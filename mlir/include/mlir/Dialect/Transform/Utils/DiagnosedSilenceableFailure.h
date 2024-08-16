@@ -66,6 +66,13 @@ public:
     return DiagnosedSilenceableFailure(
         std::forward<SmallVector<Diagnostic>>(diag));
   }
+  static DiagnosedSilenceableFailure
+  silenceableFailure(InFlightDiagnostic &&diag) {
+    auto consumingFailure = DiagnosedSilenceableFailure(
+        std::forward<Diagnostic>(*diag.getUnderlyingDiagnostic()));
+    diag.abandon(); // consumingFailure takes responsibility for diag's message.
+    return consumingFailure;
+  }
 
   /// Converts all kinds of failure into a LogicalResult failure, emitting the
   /// diagnostic if necessary. Must not be called more than once.

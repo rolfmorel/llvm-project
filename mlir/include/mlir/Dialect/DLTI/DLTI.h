@@ -33,6 +33,17 @@ DataLayoutSpecInterface getDataLayoutSpec(Operation *op);
 /// DataLayoutOpInterface, a method on ModuleOp, or an attribute implementing
 /// the interface, on `op` and else on `op`'s ancestors in turn.
 TargetSystemSpecInterface getTargetSystemSpec(Operation *op);
+
+/// Retrieve the first `DLTIQueryInterface`-implementing attribute that is
+/// attached to `op` or such an attr on as close as possible an ancestor. The
+/// op the attribute is attached to is returned as well.
+std::pair<DLTIQueryInterface, Operation *> getClosestQueryable(Operation *op);
+
+/// Perform a DLTI-query at `op`, recursively querying each key of `keys` on
+/// `DLTIQueryInterface`-implementing attrs, the first of which is obtained from
+/// `op`. When provided, (nested) lookup failure notes are attached to `diag`.
+FailureOr<Attribute> query(Operation *op, ArrayRef<StringAttr> keys,
+                           InFlightDiagnostic *diag = nullptr);
 } // namespace dlti
 } // namespace mlir
 

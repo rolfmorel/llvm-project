@@ -33,36 +33,17 @@ void transform::QueryOp::getEffects(
 DiagnosedSilenceableFailure transform::QueryOp::applyToOne(
     transform::TransformRewriter &rewriter, Operation *target,
     transform::ApplyToEachResultList &results, TransformState &state) {
-  StringAttr deviceId = getDeviceAttr();
-  StringAttr key = getKeyAttr();
+  auto keys = SmallVector<StringAttr>(getKeys().getAsRange<StringAttr>());
+  InFlightDiagnostic inflight = emitOpError("failed to apply");
 
-  DataLayoutEntryInterface entry;
-  if (deviceId) {
-    TargetSystemSpecInterface sysSpec = dlti::getTargetSystemSpec(target);
-    if (!sysSpec)
-      return mlir::emitDefiniteFailure(target->getLoc())
-             << "no target system spec associated to: " << target;
+  // Explanatory notes get attached to `inflight` when the query fails.
+  FailureOr<Attribute> result = dlti::query(target, keys, &inflight);
 
-    if (auto targetSpec = sysSpec.getDeviceSpecForDeviceID(deviceId))
-      entry = targetSpec->getSpecForIdentifier(key);
-    else
-      return mlir::emitDefiniteFailure(target->getLoc())
-             << "no " << deviceId << " target device spec found";
-  } else {
-    DataLayoutSpecInterface dlSpec = dlti::getDataLayoutSpec(target);
-    if (!dlSpec)
-      return mlir::emitDefiniteFailure(target->getLoc())
-             << "no data layout spec associated to: " << target;
+  if (failed(result))
+    return DiagnosedSilenceableFailure::silenceableFailure(std::move(inflight));
+  inflight.abandon();
 
-    entry = dlSpec.getSpecForIdentifier(key);
-  }
-
-  if (!entry)
-    return mlir::emitDefiniteFailure(target->getLoc())
-           << "no DLTI entry for key: " << key;
-
-  results.push_back(entry.getValue());
-
+  results.push_back(*result);
   return DiagnosedSilenceableFailure::success();
 }
 
