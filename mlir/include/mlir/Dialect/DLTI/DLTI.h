@@ -25,10 +25,9 @@ class DataLayoutEntryAttrStorage;
 namespace mlir {
 namespace dlti {
 /// Perform a DLTI-query at `op`, recursively querying each key of `keys` on
-/// `DLTIQueryInterface`-implementing attrs, the first of which is obtained from
-/// `op`. When provided, (nested) lookup failure notes are attached to `diag`.
+/// query interface-implementing attrs, starting from attr obtained from `op`.
 FailureOr<Attribute> query(Operation *op, ArrayRef<StringAttr> keys,
-                           InFlightDiagnostic *diag = nullptr);
+                           bool emitError = false);
 } // namespace dlti
 } // namespace mlir
 

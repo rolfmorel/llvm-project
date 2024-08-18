@@ -425,32 +425,44 @@ getClosestQueryable(Operation *op) {
 }
 
 FailureOr<Attribute> dlti::query(Operation *op, ArrayRef<StringAttr> keys,
-                                 InFlightDiagnostic *diag) {
+                                 bool emitError) {
   auto [queryable, queryOp] = getClosestQueryable(op);
+  Operation *reportOp = (queryOp ? queryOp : op);
 
-#define FAIL(message)                                                          \
-  (diag ? ((diag->attachNote(op->getLoc()) << "target op for DLTI query"),     \
-           (diag->attachNote((queryOp ? queryOp : op)->getLoc()) << message))  \
-        : failure())
-
-  if (!queryable)
-    return FAIL("no DLTI-queryable attrs on target op or any of its ancestors");
+  if (!queryable) {
+    if (emitError) {
+      auto diag = op->emitError() << "target op of failed DLTI query";
+      diag.attachNote(reportOp->getLoc())
+          << "no DLTI-queryable attrs on target op or any of its ancestors";
+    }
+    return failure();
+  }
 
   Attribute currentAttr = queryable;
   for (auto &&[idx, key] : llvm::enumerate(keys)) {
     if (auto map = llvm::dyn_cast<DLTIQueryInterface>(currentAttr)) {
       auto maybeAttr = map.query(key);
-      if (failed(maybeAttr))
-        return FAIL("key " << key << " has no DLTI-mapping per attr: " << map);
+      if (failed(maybeAttr)) {
+        if (emitError) {
+          auto diag = op->emitError() << "target op of failed DLTI query";
+          diag.attachNote(reportOp->getLoc())
+              << "key " << key << " has no DLTI-mapping per attr: " << map;
+        }
+        return failure();
+      }
       currentAttr = *maybeAttr;
     } else {
-      return FAIL("got non-DLTI-queryable attribute upon looking up keys ["
-                  << keys.take_front(idx) << "] at op");
+      if (emitError) {
+        auto diag = op->emitError() << "target op of failed DLTI query";
+        diag.attachNote(reportOp->getLoc())
+            << "got non-DLTI-queryable attribute upon looking up keys ["
+            << keys.take_front(idx) << "] at op";
+      }
+      return failure();
     }
   }
 
   return currentAttr;
-#undef FAIL
 }
 
 constexpr const StringLiteral mlir::DLTIDialect::kDataLayoutAttrName;

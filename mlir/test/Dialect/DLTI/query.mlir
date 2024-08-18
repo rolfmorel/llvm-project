@@ -249,7 +249,7 @@ module attributes {transform.with_named_sequence} {
 module attributes { test.dlti = #dlti.target_system_spec<
     "CPU": #dlti.target_device_spec<#dlti.dl_entry<"test.id", 42 : i32>>,
     "GPU": #dlti.target_device_spec<#dlti.dl_entry<"test.id", 43 : i32>>>} {
-  // expected-note @below {{target op for DLTI query}}
+  // expected-error @below {{target op of failed DLTI query}}
   func.func private @f()
 }
 
@@ -268,7 +268,7 @@ module attributes {transform.with_named_sequence} {
 module attributes { test.dlti = #dlti.target_system_spec<
     "CPU": #dlti.target_device_spec<#dlti.dl_entry<"test.id", 42 : i32>>,
     "GPU": #dlti.target_device_spec<#dlti.dl_entry<"test.id", 43 : i32>>>} {
-  // expected-note @below {{target op for DLTI query}}
+  // expected-error @below {{target op of failed DLTI query}}
   func.func private @f()
 }
 
@@ -287,7 +287,7 @@ module attributes {transform.with_named_sequence} {
 module attributes { test.dlti = #dlti.target_system_spec<
   "CPU": #dlti.target_device_spec<#dlti.dl_entry<"test.id", 42 : i32>>,
   "GPU": #dlti.target_device_spec<#dlti.dl_entry<"test.id", 43 : i32>>>} {
-  // expected-note @below {{target op for DLTI query}}
+  // expected-error @below {{target op of failed DLTI query}}
   func.func private @f()
 }
 
@@ -304,7 +304,7 @@ module attributes {transform.with_named_sequence} {
 
 // expected-note @below {{key "CPU" has no DLTI-mapping per attr: #dlti.dl_spec}}
 module attributes { test.dlti = #dlti.dl_spec<#dlti.dl_entry<"test.id", 42 : i32>>} {
-  // expected-note @below {{target op for DLTI query}}
+  // expected-error @below {{target op of failed DLTI query}}
   func.func private @f()
 }
 
@@ -321,7 +321,7 @@ module attributes {transform.with_named_sequence} {
 
 // expected-note @below {{got non-DLTI-queryable attribute upon looking up keys ["CPU"]}}
 module attributes { test.dlti = #dlti.dl_spec<#dlti.dl_entry<"CPU", 42 : i32>>} {
-  // expected-note @below {{target op for DLTI query}}
+  // expected-error @below {{target op of failed DLTI query}}
   func.func private @f()
 }
 
@@ -337,7 +337,7 @@ module attributes {transform.with_named_sequence} {
 // -----
 
 module {
-  // expected-note @below {{target op for DLTI query}}
+  // expected-error @below {{target op of failed DLTI query}}
   // expected-note @below {{no DLTI-queryable attrs on target op or any of its ancestors}}
   func.func private @f()
 }

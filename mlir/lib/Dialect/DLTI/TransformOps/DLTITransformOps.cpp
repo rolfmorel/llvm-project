@@ -34,14 +34,12 @@ DiagnosedSilenceableFailure transform::QueryOp::applyToOne(
     transform::TransformRewriter &rewriter, Operation *target,
     transform::ApplyToEachResultList &results, TransformState &state) {
   auto keys = SmallVector<StringAttr>(getKeys().getAsRange<StringAttr>());
-  InFlightDiagnostic inflight = emitOpError("failed to apply");
 
-  // Explanatory notes get attached to `inflight` when the query fails.
-  FailureOr<Attribute> result = dlti::query(target, keys, &inflight);
+  FailureOr<Attribute> result = dlti::query(target, keys, /*emitError=*/true);
 
   if (failed(result))
-    return DiagnosedSilenceableFailure::silenceableFailure(std::move(inflight));
-  inflight.abandon();
+    return emitSilenceableFailure(getLoc(),
+                                  "'transform.dlti.query' op failed to apply");
 
   results.push_back(*result);
   return DiagnosedSilenceableFailure::success();
