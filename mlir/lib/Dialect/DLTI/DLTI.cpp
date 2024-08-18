@@ -407,8 +407,11 @@ TargetSystemSpecAttr::verify(function_ref<InFlightDiagnostic()> emitError,
 // DLTIDialect
 //===----------------------------------------------------------------------===//
 
-std::pair<DLTIQueryInterface, Operation *>
-dlti::getClosestQueryable(Operation *op) {
+/// Retrieve the first `DLTIQueryInterface`-implementing attribute that is
+/// attached to `op` or such an attr on as close as possible an ancestor. The
+/// op the attribute is attached to is returned as well.
+static std::pair<DLTIQueryInterface, Operation *>
+getClosestQueryable(Operation *op) {
   DLTIQueryInterface queryable = {};
 
   // Search op and its ancestors for the first attached DLTIQueryInterface attr.
@@ -423,7 +426,7 @@ dlti::getClosestQueryable(Operation *op) {
 
 FailureOr<Attribute> dlti::query(Operation *op, ArrayRef<StringAttr> keys,
                                  InFlightDiagnostic *diag) {
-  auto [queryable, queryOp] = dlti::getClosestQueryable(op);
+  auto [queryable, queryOp] = getClosestQueryable(op);
 
 #define FAIL(message)                                                          \
   (diag ? ((diag->attachNote(op->getLoc()) << "target op for DLTI query"),     \
@@ -448,41 +451,6 @@ FailureOr<Attribute> dlti::query(Operation *op, ArrayRef<StringAttr> keys,
 
   return currentAttr;
 #undef FAIL
-}
-
-DataLayoutSpecInterface dlti::getDataLayoutSpec(Operation *op) {
-  DataLayoutSpecInterface dlSpec = nullptr;
-
-  for (Operation *cur = op; cur && !dlSpec; cur = cur->getParentOp()) {
-    if (auto dataLayoutOp = dyn_cast<DataLayoutOpInterface>(cur))
-      dlSpec = dataLayoutOp.getDataLayoutSpec();
-    else if (auto moduleOp = dyn_cast<ModuleOp>(cur))
-      dlSpec = moduleOp.getDataLayoutSpec();
-    else
-      for (NamedAttribute attr : cur->getAttrs())
-        if ((dlSpec = llvm::dyn_cast<DataLayoutSpecInterface>(attr.getValue())))
-          break;
-  }
-
-  return dlSpec;
-}
-
-TargetSystemSpecInterface dlti::getTargetSystemSpec(Operation *op) {
-  TargetSystemSpecInterface sysSpec = nullptr;
-
-  for (Operation *cur = op; cur && !sysSpec; cur = cur->getParentOp()) {
-    if (auto dataLayoutOp = dyn_cast<DataLayoutOpInterface>(cur))
-      sysSpec = dataLayoutOp.getTargetSystemSpec();
-    else if (auto moduleOp = dyn_cast<ModuleOp>(cur))
-      sysSpec = moduleOp.getTargetSystemSpec();
-    else
-      for (NamedAttribute attr : cur->getAttrs())
-        if ((sysSpec =
-                 llvm::dyn_cast<TargetSystemSpecInterface>(attr.getValue())))
-          break;
-  }
-
-  return sysSpec;
 }
 
 constexpr const StringLiteral mlir::DLTIDialect::kDataLayoutAttrName;
