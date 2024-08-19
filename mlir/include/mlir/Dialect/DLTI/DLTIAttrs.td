@@ -96,12 +96,12 @@ def DLTI_DataLayoutSpecAttr :
 def DLTI_MapAttr : DLTIAttr<"Map", [DLTIQueryInterface]> {
   let summary = "A mapping of DLTI-information by way of key-value pairs";
   let description = [{
-    A data layout and target information map is a list of entries is
-    effectively a dictionary mapping DLTI-related keys to DLTI-related values.
+    A Data Layout and Target Information map is a list of entries effectively
+    encoding a dictionary, mapping DLTI-related keys to DLTI-related values.
 
-    Its main purpose is to facilate querying IR for arbitrary DLTI-related
-    key-value associations. Note that facility functions exist to perform
-    nested lookups on nested DLTI map attributes.
+    This attribute's main purpose is to facilate querying IR for arbitrary
+    DLTI-related key-value associations. Note that facility functions exist to
+    perform recursive lookups on nested DLTI map attributes.
 
     Consider the following shallow usage of a DLTI-map
     ```
