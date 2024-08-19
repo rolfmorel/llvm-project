@@ -100,10 +100,11 @@ def DLTI_MapAttr : DLTIAttr<"Map", [DLTIQueryInterface]> {
     encoding a dictionary, mapping DLTI-related keys to DLTI-related values.
 
     This attribute's main purpose is to facilate querying IR for arbitrary
-    DLTI-related key-value associations. Note that facility functions exist to
-    perform recursive lookups on nested DLTI map attributes.
+    key-value associations that encode DLTI. Facility functions exist to perform
+    recursive lookups on nested DLTI-map/query interface-implementing
+    attributes.
 
-    Consider the following shallow usage of a DLTI-map
+    Consider the following flat encoding of a single-key dictionary
     ```
     #dlti.map<#dlti.dl_entry<"CPU::cache::L1::size_in_bytes", 65536 : i32>>
     ```
@@ -114,9 +115,23 @@ def DLTI_MapAttr : DLTIAttr<"Map", [DLTIQueryInterface]> {
     #dlti.target_system_spec<"CPU":
       #dlti.target_device_spec<#dlti.dl_entry<"cache",
         #dlti.map<#dlti.dl_entry<"L1",
-          #dlti.map<#dlti.dl_entry<"size_in_bytes", 65536 : i32>>,
+          #dlti.map<#dlti.dl_entry<"size_in_bytes", 65536 : i32>>>,
                   #dlti.dl_entry<"L1d",
-          #dlti.map<#dlti.dl_entry<"size_in_bytes", 32768 : i32>> >>>>
+          #dlti.map<#dlti.dl_entry<"size_in_bytes", 32768 : i32>>> >>>>
+    ```
+
+    With the flat encoding, the implied structure of the key is ignored, that is
+    the only successful query (as expressed in the Transform Dialect) is:
+    `transform.dlti.query ["CPU::cache::L1::size_in_bytes"] at %op`,
+    where `%op` is a handle to an operation which associates the flat-encoding
+    `#dlti.map` attribute.
+
+    For querying nested dictionaries, the relevant keys need to be separately
+    provided. That is, if `%op` is an handle to an op which has the nesting
+    `#dlti.target_system_spec`-attribute from above attached, then
+    `transform.dlti.query ["CPU","cache","L1","size_in_bytes"] at %op` gives
+    back the first leaf value contained. To access the other leaf, we need to do
+    `transform.dlti.query ["CPU","cache","L1d","size_in_bytes"] at %op`.
     ```
    }];
   let parameters = (ins
