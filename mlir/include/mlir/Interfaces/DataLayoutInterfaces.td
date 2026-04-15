@@ -16,6 +16,7 @@
 
 include "mlir/IR/OpBase.td"
 
+
 //===----------------------------------------------------------------------===//
 // Attribute interfaces
 //===----------------------------------------------------------------------===//
@@ -24,7 +25,7 @@ def DLTIQueryInterface : AttrInterface<"DLTIQueryInterface"> {
   let cppNamespace = "::mlir";
 
   let description = [{
-    Attribute interface exposing querying-mechanism for key-value associations.
+    Attribute interface exposing querying mechanism for key-value associations.
 
     The central feature of DLTI attributes is to allow looking up values at
     keys. This interface represent the core functionality to do so - as such
@@ -38,7 +39,24 @@ def DLTIQueryInterface : AttrInterface<"DLTIQueryInterface"> {
       /*description=*/"Returns the attribute associated with the key.",
       /*retTy=*/"::mlir::FailureOr<::mlir::Attribute>",
       /*methodName=*/"query",
-      /*args=*/(ins "::mlir::DataLayoutEntryKey":$key)
+      ///*args=*/(ins "::mlir::ArrayRef<::mlir::Attribute>":$keys)
+      /*args=*/(ins "::mlir::dlti::QueryContext &":$context)
+    >
+  ];
+}
+
+def QueryableAttrInterface : AttrInterface<"QueryableAttrInterface"> {
+  let cppNamespace = "::mlir";
+
+  let description = [{
+    Attribute interface exposing querying-mechanism for key-value associations.
+  }];
+  let methods = [
+    InterfaceMethod<
+      /*description=*/"Returns the attribute associated with the key.",
+      /*retTy=*/"::mlir::FailureOr<::mlir::Attribute>",
+      /*methodName=*/"query",
+      /*args=*/(ins "::mlir::AttrQueryContext *":$context)
     >
   ];
 }
@@ -91,7 +109,7 @@ def DataLayoutEntryInterface : AttrInterface<"DataLayoutEntryInterface"> {
   }];
 }
 
-def DataLayoutSpecInterface : AttrInterface<"DataLayoutSpecInterface", [DLTIQueryInterface]> {
+def DataLayoutSpecInterface : AttrInterface<"DataLayoutSpecInterface"> {
   let cppNamespace = "::mlir";
 
   let description = [{

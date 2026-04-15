@@ -944,6 +944,133 @@ mlir::detail::verifyTargetSystemSpec(TargetSystemSpecInterface spec,
   return success();
 }
 
+FailureOr<Attribute>
+AttrQueryContext::queryAttributesOfOp(Operation *op, InFlightDiagnostic &diag) {
+  QueryableAttrInterface queryable = nullptr;
+  for (NamedAttribute attr : op->getAttrs()) {
+    queryable = dyn_cast<QueryableAttrInterface>(attr.getValue());
+
+    LLVM_DEBUG(DBGS() << "queryAttributesOfOp: attr = " << attr.getValue()
+                      << " ; queryable = " << (queryable != nullptr) << "\n");
+    if (!queryable)
+      continue;
+    // know queryable is queryable.
+
+    FailureOr<Attribute> maybeAttr = queryable.query(this);
+    if (failed(maybeAttr)) {
+      if (emitErrors && stack.back().firstRemainingKeyIndex != 0) {
+        diag.attachNote(op->getLoc())
+            << "query of attribute failed for op " << op;
+      }
+      LLVM_DEBUG(DBGS() << "queryAttributesOfOp: query of attr failed\n");
+      stack.back().reset();
+      continue;
+    }
+    LLVM_DEBUG(DBGS() << "queryAttributesOfOp: query result = "
+                      << maybeAttr.value() << "\n");
+    // know maybeAttr is not nullopt
+    QueryableAttrInterface nestedQueryable;
+    while (stack.back().peek()) {
+      LLVM_DEBUG(DBGS() << "queryAttributesOfOp: attempting nested query\n");
+      if ((nestedQueryable =
+               dyn_cast<QueryableAttrInterface>(maybeAttr.value()))) {
+        auto nestedMaybeAttr = nestedQueryable.query(this);
+        if (failed(nestedMaybeAttr)) {
+          LLVM_DEBUG(DBGS() << "queryAttributesOfOp: nested query failed\n");
+          stack.back().reset();
+          break; // Next attr needs to answer from the first key.
+        }
+        LLVM_DEBUG(DBGS() << "queryAttributesOfOp: nested query result = "
+                          << maybeAttr.value() << "\n");
+        maybeAttr = nestedMaybeAttr;
+
+      } else {
+        LLVM_DEBUG(DBGS() << "queryAttributesOfOp: result attr is not "
+                          << "queryable!\n");
+        stack.back().reset();
+        break; // Next attr needs to answer from the first key.
+      }
+    }
+    if (stack.back().peek()) {
+      stack.back().reset();
+      continue; // Try query from first key on next attr of op.
+    }
+    return maybeAttr.value();
+  }
+  return failure();
+}
+
+FailureOr<Attribute> AttrQueryContext::query(ArrayRef<QueryableKey> keys,
+                                             std::optional<Operation *> op) {
+  Operation *targetOp = op == std::nullopt ? stack.back().op : *op;
+  stack.push_back({targetOp, keys});
+
+  InFlightDiagnostic diag = targetOp->emitError()
+                            << "target op of failed DLTI query";
+
+  LLVM_DEBUG(DBGS() << "query: target op = " << targetOp << "\n");
+#ifndef NDEBUG
+  LLVM_DEBUG(DBGS() << "query: keys = [ ");
+  for (size_t i = 0; i < keys.size(); ++i) {
+    if (i != 0)
+      llvm::dbgs() << ", ";
+    if (auto strAttr = llvm::dyn_cast_if_present<StringAttr>(keys[i]))
+      llvm::dbgs() << strAttr;
+    else if (auto type = llvm::dyn_cast_if_present<Type>(keys[i]))
+      llvm::dbgs() << type;
+  }
+  llvm::dbgs() << " ]\n";
+#endif // NDEBUG
+
+  if (keys.empty()) {
+    if (emitErrors)
+      diag.attachNote(targetOp->getLoc())
+          << "no keys provided to attempt query with";
+    else
+      diag.abandon();
+    return failure();
+  }
+
+  for (Operation *currentOp = targetOp; currentOp;
+       currentOp = currentOp->getParentOp()) {
+    LLVM_DEBUG(DBGS() << "query: current op = " << currentOp << "\n");
+    auto it = cache.find(std::make_tuple(targetOp, keys));
+    if (it != cache.end()) {
+      LLVM_DEBUG(DBGS() << "query: cache hit: result = " << it->getSecond()
+                        << "\n");
+      stack.pop_back();
+      return it->getSecond();
+    }
+
+    auto maybeAttr = queryAttributesOfOp(currentOp, diag);
+    if (maybeAttr == std::nullopt) {
+      LLVM_DEBUG(DBGS() << "query: unsuccessful at op = " << currentOp << "\n");
+      continue; // try at next ancestor
+    }
+    LLVM_DEBUG(DBGS() << "query: successful at op = " << currentOp << "\n");
+    // know the result is not nullopt
+    if (stack.back().peek()) {
+      assert(false &&
+             "lolwut"); // queryAttributesOfOp does not allow for this to happen
+    }
+    // know there are no remaining keys
+    LLVM_DEBUG(DBGS() << "query: cache insert of result = " << *maybeAttr
+                      << "\n");
+    for (Operation *opToCache = targetOp; opToCache != nullptr;
+         opToCache = opToCache->getParentOp()) {
+      cache.insert(
+          std::make_pair(std::make_tuple(opToCache, keys), *maybeAttr));
+      if (opToCache == currentOp)
+        break;
+    }
+    stack.pop_back();
+    return maybeAttr.value();
+  }
+
+  stack.pop_back();
+  return failure();
+}
+
 #include "mlir/Interfaces/DataLayoutAttrInterface.cpp.inc"
 #include "mlir/Interfaces/DataLayoutOpInterface.cpp.inc"
 #include "mlir/Interfaces/DataLayoutTypeInterface.cpp.inc"
