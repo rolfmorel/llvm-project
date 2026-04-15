@@ -2,6 +2,7 @@
 #  See https://llvm.org/LICENSE.txt for license information.
 #  SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+from functools import partial
 from typing import (
     Dict,
     List,
@@ -13,6 +14,8 @@ from typing import (
     TypeVar,
     get_origin,
     get_args,
+    overload,
+    dataclass_transform
 )
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -22,8 +25,6 @@ from . import irdl
 from ._ods_common import _cext, segmented_accessor
 from .irdl import Variadicity
 from ..passmanager import PassManager
-
-ir = _cext.ir
 
 __all__ = [
     "Dialect",
@@ -35,12 +36,37 @@ __all__ = [
     "register_operation",
 ]
 
+ir = _cext.ir
+
 Operand = ir.Value
 Result = ir.OpResult
 Region = ir.Region
 
 register_dialect = _cext.register_dialect
 register_operation = _cext.register_operation
+
+T = TypeVar("T", bound=ir.Type)
+@overload
+def result_converter_(type: Sequence[T]) -> Sequence[ir.OpResult[T]]:
+    pass
+
+@overload
+def result_converter(type: None) -> None:
+    pass
+
+@overload
+def result_converter(type: T) -> ir.OpResult[T]:
+    pass
+
+@dataclass
+class ResultField:
+    init: bool
+    converter: Callable[[Any], Any]
+
+def result_field(*, init: bool = False, converter=result_converter) -> Any:
+    return ResultField(init=init, converter=converter)
+
+
 
 
 class ConstraintLoweringContext:
@@ -200,6 +226,7 @@ def match_optional(type_) -> Optional[Any]:
     return None
 
 
+@dataclass_transform(field_specifiers=(ResultField, result_field))
 class Operation(ir.OpView):
     """
     Base class of Python-defined operation.

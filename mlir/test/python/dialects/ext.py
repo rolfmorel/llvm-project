@@ -1,15 +1,19 @@
 # RUN: %PYTHON %s 2>&1 | FileCheck %s
 
+from mlir import ir
 from mlir.ir import *
 from mlir.dialects import arith
+from mlir.dialects.ext import Result, Operand, result_field, result_converter
 from mlir.dialects.ext import *
-from typing import Any, Optional, Sequence, TypeVar, Union
-import sys
+from typing import Any, Optional, Sequence, TypeVar, Union, Literal, Generic, reveal_type
 
 
 def run(f):
     print("\nTEST:", f.__name__)
     f()
+
+
+T = TypeVar("T", bound=Type)
 
 
 # CHECK: TEST: testMyInt
@@ -18,7 +22,18 @@ def testMyInt():
     class MyInt(Dialect, name="myint"):
         pass
 
-    i32 = IntegerType[32]
+    i32 = ir.IntegerType[32]
+
+    X = TypeVar("X", bound=ir.Type)
+    BitWidth = TypeVar("BitWidth", bound=Literal[8, 16, 32, 64])
+    class MyOp(MyInt.Operation, Generic[X, BitWidth], name="my_op"):
+        res1: Result[ir.IntegerType[Literal[32]]] = result_field()
+        res2: Result[ir.IntegerType[BitWidth]] = result_field(init=True, converter=result_converter)
+        res3: Result[ir.IntegerType[BitWidth]] = result_field(init=True, converter=result_converter)
+        res4: Result[X] | None = result_field(init=True, converter=result_converter)
+        arg: Operand[ir.IntegerType[BitWidth]]
+
+    reveal_type(MyOp.__init__)
 
     class ConstantOp(MyInt.Operation, name="constant"):
         value: IntegerAttr
