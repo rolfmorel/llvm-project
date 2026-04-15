@@ -484,3 +484,151 @@ module attributes {transform.with_named_sequence} {
     transform.yield
   }
 }
+
+// -----
+
+module attributes { test.dlti =
+  #dlti.target_system_spec<"CPU" =
+    #dlti.target_device_spec<"vector unit" =
+      #dlti.map<"registers fit" = #dlti.map<f32 = 32 : i32>>>> } {
+  func.func @matmul_tensors(
+    %arg0: tensor<?x?xf32>, %arg1: tensor<?x?xf32>, %arg2: tensor<?x?xf32>)
+      -> tensor<?x?xf32> attributes {test.dlti = #dlti.matmul_cost_model } {
+    // expected-remark @below {{fits this many f32s: 32 : i32}}
+    // expected-remark @below {{M blocking factor: 5 : i64}}
+    // expected-remark @below {{N blocking factor: 6 : i64}}
+    %0 = linalg.matmul  ins(%arg0, %arg1: tensor<?x?xf32>, tensor<?x?xf32>)
+                       outs(%arg2: tensor<?x?xf32>)
+      -> tensor<?x?xf32>
+    return %0 : tensor<?x?xf32>
+  }
+}
+
+module attributes {transform.with_named_sequence} {
+  transform.named_sequence @__transform_main(%arg: !transform.any_op) {
+    %matmul = transform.structured.match ops{["linalg.matmul"]} in %arg : (!transform.any_op) -> !transform.any_op
+    %param = transform.dlti.query ["CPU", "vector unit", "registers fit", f32] at %matmul : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %param, "fits this many f32s:" at %matmul : !transform.any_param, !transform.any_op
+    %blockM = transform.dlti.query ["register block", "matmul", "M", f32] at %matmul : (!transform.any_op) -> !transform.any_param
+    %blockN = transform.dlti.query ["register block", "matmul", "N", f32] at %matmul : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %blockM, "M blocking factor:" at %matmul : !transform.any_param, !transform.any_op
+    transform.debug.emit_param_as_remark %blockN, "N blocking factor:" at %matmul : !transform.any_param, !transform.any_op
+    transform.yield
+  }
+}
+
+// -----
+
+module attributes { test.dlti =
+  #dlti.target_system_spec<"CPU" =
+    #dlti.target_device_spec<"vector unit" =
+      #dlti.map<"registers fit" = #dlti.map<f32 = 64 : i32>>>>, test.cost_model = #dlti.matmul_cost_model } {
+  func.func @matmul_tensors(
+    %arg0: tensor<?x?xf32>, %arg1: tensor<?x?xf32>, %arg2: tensor<?x?xf32>)
+      -> tensor<?x?xf32> attributes { } {
+    // expected-remark @below {{fits this many f32s: 64 : i32}}
+    // expected-remark @below {{M blocking factor: 6 : i64}}
+    // expected-remark @below {{N blocking factor: 10 : i64}}
+    %0 = linalg.matmul  ins(%arg0, %arg1: tensor<?x?xf32>, tensor<?x?xf32>)
+                       outs(%arg2: tensor<?x?xf32>)
+      -> tensor<?x?xf32>
+    return %0 : tensor<?x?xf32>
+  }
+}
+
+module attributes {transform.with_named_sequence} {
+  transform.named_sequence @__transform_main(%arg: !transform.any_op) {
+    %matmul = transform.structured.match ops{["linalg.matmul"]} in %arg : (!transform.any_op) -> !transform.any_op
+    %param = transform.dlti.query ["CPU", "vector unit", "registers fit", f32] at %matmul : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %param, "fits this many f32s:" at %matmul : !transform.any_param, !transform.any_op
+    %blockM = transform.dlti.query ["register block", "matmul", "M", f32] at %matmul : (!transform.any_op) -> !transform.any_param
+    %blockN = transform.dlti.query ["register block", "matmul", "N", f32] at %matmul : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %blockM, "M blocking factor:" at %matmul : !transform.any_param, !transform.any_op
+    transform.debug.emit_param_as_remark %blockN, "N blocking factor:" at %matmul : !transform.any_param, !transform.any_op
+    transform.yield
+  }
+}
+
+// -----
+
+module attributes {
+  test.dlti = #dlti.target_system_spec<"CPU" =
+    #dlti.target_device_spec<"vector unit" =
+      #dlti.map<"registers fit" = #dlti.map<f32 = 64 : i32>>>>,
+  test.cost_model = #dlti.map<"register block" =
+    #dlti.map<"matmul" =
+      #dlti.matmul_register_blocking_model >> } {
+  func.func @matmul_tensors(
+    %arg0: tensor<?x?xf32>, %arg1: tensor<?x?xf32>, %arg2: tensor<?x?xf32>)
+      -> tensor<?x?xf32> attributes { } {
+    // expected-remark @below {{fits this many f32s: 64 : i32}}
+    // expected-remark @below {{blocking factors: [6, 10]}}
+    %0 = linalg.matmul  ins(%arg0, %arg1: tensor<?x?xf32>, tensor<?x?xf32>)
+                       outs(%arg2: tensor<?x?xf32>)
+      -> tensor<?x?xf32>
+    return %0 : tensor<?x?xf32>
+  }
+}
+
+module attributes {transform.with_named_sequence} {
+  transform.named_sequence @__transform_main(%arg: !transform.any_op) {
+    %matmul = transform.structured.match ops{["linalg.matmul"]} in %arg : (!transform.any_op) -> !transform.any_op
+    %param = transform.dlti.query ["CPU", "vector unit", "registers fit", f32] at %matmul : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %param, "fits this many f32s:" at %matmul : !transform.any_param, !transform.any_op
+    %blockFactors = transform.dlti.query ["register block", "matmul", f32] at %matmul : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %blockFactors, "blocking factors:" at %matmul : !transform.any_param, !transform.any_op
+    transform.yield
+  }
+}
+
+// -----
+
+// Demonstation of nested lookup by walking ancestors and co-commitant shadowing.
+
+// expected-remark @below {{associated CPU attr at module 42 : i32}}
+// expected-remark @below {{associated GPU attr at module 43 : i32}}
+module attributes { test.dlti = #dlti.map<"CPU" = #dlti.map<"test.id" = 42 : i32>,
+                                          "GPU" = #dlti.map<"test.id" = 43 : i32>> } {
+  // expected-remark @below {{associated CPU attr at func 42 : i32}}
+  // expected-remark @below {{associated GPU attr at func 43 : i32}}
+  func.func @f(%A: tensor<128x128xf32>) {
+    // expected-remark @below {{associated CPU attr at matmul 24 : i32}}
+    // expected-remark @below {{associated GPU attr at matmul 43 : i32}}
+    %0 = linalg.matmul { test.dlti = #dlti.target_system_spec<"CPU" = #dlti.target_device_spec<"test.id" = 24 : i32>> } ins(%A, %A : tensor<128x128xf32>, tensor<128x128xf32>)
+                        outs(%A : tensor<128x128xf32>) -> tensor<128x128xf32>
+    // expected-remark @below {{associated CPU attr at constant 42 : i32}}
+    // expected-remark @below {{associated GPU attr at constant 43 : i32}}
+    arith.constant 0 : i32
+    return
+  }
+}
+
+module attributes {transform.with_named_sequence} {
+  transform.named_sequence @__transform_main(%arg: !transform.any_op) {
+    %constant = transform.structured.match ops{["arith.constant"]} in %arg : (!transform.any_op) -> !transform.any_op
+    %matmul = transform.structured.match ops{["linalg.matmul"]} in %arg : (!transform.any_op) -> !transform.any_op
+    %func = transform.structured.match ops{["func.func"]} in %arg : (!transform.any_op) -> !transform.any_op
+    %module = transform.get_parent_op %func : (!transform.any_op) -> !transform.any_op
+    // First query at the matmul
+    %cpu_matmul_param = transform.dlti.query ["CPU","test.id"] at %matmul : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %cpu_matmul_param, "associated CPU attr at matmul" at %matmul : !transform.any_param, !transform.any_op
+    %gpu_matmul_param = transform.dlti.query ["GPU","test.id"] at %matmul : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %gpu_matmul_param, "associated GPU attr at matmul" at %matmul : !transform.any_param, !transform.any_op
+    // Now query at the constant
+    %cpu_constant_param = transform.dlti.query ["CPU","test.id"] at %constant : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %cpu_constant_param, "associated CPU attr at constant" at %constant : !transform.any_param, !transform.any_op
+    %gpu_constant_param = transform.dlti.query ["GPU","test.id"] at %constant : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %gpu_constant_param, "associated GPU attr at constant" at %constant : !transform.any_param, !transform.any_op
+    // Now query at the func
+    %cpu_func_param = transform.dlti.query ["CPU","test.id"] at %func : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %cpu_func_param, "associated CPU attr at func" at %func : !transform.any_param, !transform.any_op
+    %gpu_func_param = transform.dlti.query ["GPU","test.id"] at %func : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %gpu_func_param, "associated GPU attr at func" at %func : !transform.any_param, !transform.any_op
+    // Now query at the module
+    %cpu_module_param = transform.dlti.query ["CPU","test.id"] at %module : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %cpu_module_param, "associated CPU attr at module" at %module : !transform.any_param, !transform.any_op
+    %gpu_module_param = transform.dlti.query ["GPU","test.id"] at %module : (!transform.any_op) -> !transform.any_param
+    transform.debug.emit_param_as_remark %gpu_module_param, "associated GPU attr at module" at %module : !transform.any_param, !transform.any_op
+    transform.yield
+  }
+}

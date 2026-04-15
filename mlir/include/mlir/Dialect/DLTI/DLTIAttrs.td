@@ -12,6 +12,7 @@
 include "mlir/Dialect/DLTI/DLTI.td"
 include "mlir/Interfaces/DataLayoutInterfaces.td"
 include "mlir/IR/AttrTypeBase.td"
+include "mlir/IR/BuiltinTypes.td"
 
 class DLTIAttr<string name, list<Trait> traits = [],
                 string baseCppClass = "::mlir::Attribute">
@@ -103,7 +104,7 @@ def DLTI_DataLayoutSpecAttr :
 // MapAttr
 //===----------------------------------------------------------------------===//
 
-def DLTI_MapAttr : DLTIAttr<"Map", [DLTIQueryInterface]> {
+def DLTI_MapAttr : DLTIAttr<"Map", [DLTIQueryInterface, QueryableAttrInterface]> {
   let summary = "A mapping of DLTI-information by way of key-value pairs";
   let description = [{
     A Data Layout and Target Information map is a list of entries effectively
@@ -155,15 +156,222 @@ def DLTI_MapAttr : DLTIAttr<"Map", [DLTIQueryInterface]> {
             return entry.getValue();
       return ::mlir::failure();
     }
+    FailureOr<Attribute> query(AttrQueryContext *context) {
+      QueryableKey key = context->peekKey();
+      // DataLayoutEntryKey dlKey;
+      // if (auto keyAttr = key.dyn_cast<Attribute>()) {
+      //   if (auto keyStrAttr = keyAttr.dyn_cast<StringAttr>()) {
+      //     dlKey = DataLayoutEntryKey(keyStrAttr);
+      //   } else {
+      //     return ::mlir::failure();
+      //   }
+      // } else if (auto keyType = key.dyn_cast<Type>()) {
+      //   dlKey = DataLayoutEntryKey(keyType);
+      // }
+      for (DataLayoutEntryInterface entry : getEntries()) {
+        //if (entry.getKey() == dlKey) {
+        if (entry.getKey() == key) {
+          context->consumeKey(key);
+          return entry.getValue();
+        }
+      }
+
+      return ::mlir::failure();
+    }
   }];
 }
+
+def DLTI_MatmulRegisterBlockingModelAttr : DLTIAttr<"MatmulRegisterBlockingModel", [QueryableAttrInterface]> {
+  let summary = "TODO";
+  let description = [{
+    TODO
+   }];
+  let mnemonic = "matmul_register_blocking_model";
+  let genVerifyDecl = 1;
+  let extraClassDeclaration = [{
+    FailureOr<Attribute> query(AttrQueryContext *context);
+  }];
+}
+
+def DLTI_MatmulCostModelAttr : DLTIAttr<"MatmulCostModel", [QueryableAttrInterface]> {
+  let summary = "TODO";
+  let description = [{
+    TODO
+   }];
+  let mnemonic = "matmul_cost_model";
+  let genVerifyDecl = 1;
+  let extraClassDeclaration = [{
+    FailureOr<Attribute> query(AttrQueryContext *context);
+  }];
+}
+  //let extraClassDeclaration = [{
+  //  FailureOr<Attribute> query(AttrQueryContext *context) {
+  //    QueryableKey modeKey = context->peekKey(/*index=*/0);
+  //    int mode = 0;
+
+  //    //if (auto modeStrAttr = dyn_cast<StringAttr>(dyn_cast<Attribute>(modeKey))) {
+  //    if (auto modeStrAttr = dyn_cast<StringAttr>(modeKey)) {
+  //      if (modeStrAttr.getValue() == "register block") {
+  //        mode = 1;
+  //      } else if (modeStrAttr.getValue() == "cache tile") {
+  //        mode = 2;
+  //      }
+  //    }
+  //
+  //    //
+
+  //    if (mode == 0) return ::mlir::failure();
+
+  //    QueryableKey operatorKey = context->peekKey(/*index=*/1);
+  //    //if (auto operatorStrAttr = dyn_cast<StringAttr>(dyn_cast<Attribute>(operatorKey))) {
+  //    if (auto operatorStrAttr = dyn_cast<StringAttr>(operatorKey)) {
+  //      if (operatorStrAttr.getValue() != "matmul") {
+  //        return ::mlir::failure();
+  //      }
+  //    } else {
+  //      return ::mlir::failure();
+  //    }
+
+  //    if (mode == 1) {
+  //      QueryableKey dimKey = context->peekKey(/*index=*/2);
+  //      StringRef dimStr;
+  //      //if (auto dimStrAttr = dyn_cast<StringAttr>(dyn_cast<Attribute>(dimKey))) {
+  //      if (auto dimStrAttr = dyn_cast<StringAttr>(dimKey)) {
+  //        dimStr = dimStrAttr.getValue();
+  //        if (dimStr != "M" && dimStr != "N") {
+  //          return ::mlir::failure();
+  //        }
+  //      } else {
+  //        return ::mlir::failure();
+  //      }
+
+  //      QueryableKey elemTypeKey = context->peekKey(/*index=*/3);
+  //      Type elemType;
+  //      if (!(elemType = dyn_cast<Type>(elemTypeKey))) {
+  //        return ::mlir::failure();
+  //      }
+
+  //      QueryableKey k0 = StringAttr::get(getContext(), "CPU");
+  //      QueryableKey k1 = StringAttr::get(getContext(), "vector unit");
+  //      QueryableKey k2 = StringAttr::get(getContext(), "registers fit");
+  //      FailureOr<Attribute> maybeSpaceInRegisters = \
+  //          context->query({k0, k1, k2, elemType});
+
+  //      if (failed(maybeSpaceInRegisters)) {
+  //        return ::mlir::failure();
+  //      }
+
+  //      auto spaceInRegisters = dyn_cast<IntegerAttr>(*maybeSpaceInRegisters).getInt();
+
+  //      Type i64 = IntegerType::get(getContext(), 64);
+  //      if (spaceInRegisters >= 32 && spaceInRegisters < 64) {
+  //        context->consumeKey();
+  //        context->consumeKey();
+  //        context->consumeKey();
+  //        context->consumeKey();
+  //        if (dimStr == "M") {
+  //          return IntegerAttr::get(i64, 5);
+  //        } else if (dimStr == "N") {
+  //          return IntegerAttr::get(i64, 6);
+  //        }
+  //      } else if (spaceInRegisters >= 64 && spaceInRegisters < 128) {
+  //        context->consumeKey();
+  //        context->consumeKey();
+  //        context->consumeKey();
+  //        context->consumeKey();
+  //        if (dimStr == "M") {
+  //          return IntegerAttr::get(i64, 6);
+  //        } else if (dimStr == "N") {
+  //          return IntegerAttr::get(i64, 16);
+  //        }
+  //      }
+  //    }
+
+  //    if (mode == 2) {
+  //      // TODO: caching tile cost model
+  //      return ::mlir::failure();
+  //    }
+
+  //    return ::mlir::failure();
+  //  }
+  //}];
+
+// def DLTI_MatmulCostModelAttr_OLD : DLTIAttr<"MatmulCostModel", [QueryableAttrInterface]> {
+//   let summary = "TODO";
+//   let description = [{
+//     TODO
+//    }];
+//   let mnemonic = "matmul_cost_model";
+//   let genVerifyDecl = 1;
+//   let extraClassDeclaration = [{
+//     FailureOr<Attribute> query(AttrQueryContext *context) {
+//       QueryableKey level = context->peekKey(index=0);
+//       QueryableKey action = context->peekKey(index=1);
+//
+//       int mode = 0;
+//
+//       if (auto levelStrAttr = level.dyn_cast<Attribute>().dyn_cast<StringAttr>()) {
+//         if (auto actionStrAttr = action.dyn_cast<Attribute>().dyn_cast<StringAttr>()) {
+//           if (levelStrAttr.getValue() == "cache" &&
+//               actionStrAttr.getValue() == "tiling") {
+//           mode = 1;
+//         } else if (levelStrAttr.getValue() == "register" &&
+//                    actionStrAttr.getValue() == "blocking") {
+//           mode = 2;
+//         }
+//       }
+//       if (mode == 0)
+//         return ::mlir::failure();
+//
+//       if (mode == 1) {
+//         QueryableKey typeAKey = context->peekKey(index=2);
+//         QueryableKey typeBKey = context->peekKey(index=3);
+//         ShapedType typeA, typeB;
+//         if (!(typeA = typeAKey.dyn_cast<Type>().dyn_cast<ShapedType>()) ||
+//             !(typeB = typeBKey.dyn_cast<Type>().dyn_cast<ShapedType>())) {
+//           return ::mlir::failure();
+//         }
+//
+//         ArrayRef<int64_t> shapeA = typeA.getShape();
+//         ArrayRef<int64_t> shapeB = typeB.getShape();
+//         int64_t m = shapeA[0];
+//         int64_t n = shapeB[1];
+//         int64_t k = shapeA[1];
+//
+//         FailureOr<Attribute> maybeCacheInfo = context.query({"CPU", "cache", "L1", "size_in_bytes"});
+//         if (maybeCacheInfo.failed()) {
+//           return ::mlir::failure();
+//         }
+//
+//         auto l1CacheSize = maybeCacheInfo.get().dyn_cast<IntegerAttr>().getValue();
+//
+//         if (m * k + n * k + m * n <= l1CacheSize) {
+//           context.consumeKey();
+//           context.consumeKey();
+//           context.consumeKey();
+//           context.consumeKey();
+//           return IntegerAttr::get(getContext(), 0);
+//         }
+//
+//       }
+//
+//       if (mode == 2) {
+//         FailureOr<Attribute> maybeRegisterInfo = context.query({"CPU", "vector_unit", "num_registers"});
+//       }
+//
+//       QueryableKey level = context->peekKey(index=0);
+//
+//       return ::mlir::failure();
+//     }
+//   }];
+// }
 
 //===----------------------------------------------------------------------===//
 // TargetSystemSpecAttr
 //===----------------------------------------------------------------------===//
 
 def DLTI_TargetSystemSpecAttr :
-    DLTIAttr<"TargetSystemSpec", [TargetSystemSpecInterface]> {
+    DLTIAttr<"TargetSystemSpec", [TargetSystemSpecInterface,QueryableAttrInterface]> {
   let summary = "An attribute to represent target system specification.";
   let description = [{
     A system specification describes the overall system containing
@@ -201,6 +409,18 @@ def DLTI_TargetSystemSpecAttr :
     FailureOr<Attribute> query(DataLayoutEntryKey key) const {
       return ::llvm::cast<mlir::TargetSystemSpecInterface>(*this).queryHelper(key);
     }
+    FailureOr<Attribute> query(AttrQueryContext *context) {
+      QueryableKey key = context->peekKey();
+      for (DataLayoutEntryInterface entry : getEntries()) {
+        //if (entry.getKey() == dlKey) {
+        if (entry.getKey() == key) {
+          context->consumeKey(key);
+          return entry.getValue();
+        }
+      }
+
+      return ::mlir::failure();
+    }
   }];
   let extraClassDefinition = [{
     std::optional<TargetDeviceSpecInterface>
@@ -222,7 +442,7 @@ def DLTI_TargetSystemSpecAttr :
 //===----------------------------------------------------------------------===//
 
 def DLTI_TargetDeviceSpecAttr :
-    DLTIAttr<"TargetDeviceSpec", [TargetDeviceSpecInterface]> {
+    DLTIAttr<"TargetDeviceSpec", [TargetDeviceSpecInterface,QueryableAttrInterface]> {
   let summary = "An attribute to represent target device specification.";
   let description = [{
     Each device specification describes a single device and its
@@ -245,6 +465,18 @@ def DLTI_TargetDeviceSpecAttr :
     /// Returns the attribute associated with the key.
     FailureOr<Attribute> query(DataLayoutEntryKey key) const {
       return ::llvm::cast<mlir::TargetDeviceSpecInterface>(*this).queryHelper(key);
+    }
+    FailureOr<Attribute> query(AttrQueryContext *context) {
+      QueryableKey key = context->peekKey();
+      for (DataLayoutEntryInterface entry : getEntries()) {
+        //if (entry.getKey() == dlKey) {
+        if (entry.getKey() == key) {
+          context->consumeKey(key);
+          return entry.getValue();
+        }
+      }
+
+      return ::mlir::failure();
     }
   }];
 }

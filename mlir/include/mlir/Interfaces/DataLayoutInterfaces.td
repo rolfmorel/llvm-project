@@ -43,6 +43,22 @@ def DLTIQueryInterface : AttrInterface<"DLTIQueryInterface"> {
   ];
 }
 
+def QueryableAttrInterface : AttrInterface<"QueryableAttrInterface"> {
+  let cppNamespace = "::mlir";
+
+  let description = [{
+    Attribute interface exposing querying-mechanism for key-value associations.
+  }];
+  let methods = [
+    InterfaceMethod<
+      /*description=*/"Returns the attribute associated with the key.",
+      /*retTy=*/"::mlir::FailureOr<::mlir::Attribute>",
+      /*methodName=*/"query",
+      /*args=*/(ins "::mlir::AttrQueryContext *":$context)
+    >
+  ];
+}
+
 def DataLayoutEntryInterface : AttrInterface<"DataLayoutEntryInterface"> {
   let cppNamespace = "::mlir";
 

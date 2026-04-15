@@ -14,6 +14,7 @@
 #define MLIR_DIALECT_DLTI_DLTI_H
 
 #include "mlir/IR/Attributes.h"
+#include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/Interfaces/DataLayoutInterfaces.h"
 

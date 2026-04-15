@@ -672,3 +672,161 @@ LogicalResult DLTIDialect::verifyOperationAttribute(Operation *op,
   return op->emitError() << "attribute '" << attr.getName().getValue()
                          << "' not supported by dialect";
 }
+
+FailureOr<Attribute> MatmulCostModelAttr::query(AttrQueryContext *context) {
+  LLVM_DEBUG(llvm::dbgs() << "MatmulCostModelAttr::query: right at the start"
+                          << "\n");
+  QueryableKey modeKey = context->peekKey(/*index=*/0);
+  int mode = 0;
+
+  // if (auto modeStrAttr = dyn_cast<StringAttr>(dyn_cast<Attribute>(modeKey)))
+  // {
+  if (auto modeStrAttr = dyn_cast<StringAttr>(modeKey)) {
+    if (modeStrAttr.getValue() == "register block") {
+      mode = 1;
+    } else if (modeStrAttr.getValue() == "cache tile") {
+      mode = 2;
+    }
+  }
+
+  LLVM_DEBUG(llvm::dbgs() << "MatmulCostModelAttr::query: mode = " << mode
+                          << "\n");
+
+  if (mode == 0)
+    return ::mlir::failure();
+
+  QueryableKey operatorKey = context->peekKey(/*index=*/1);
+  // if (auto operatorStrAttr =
+  // dyn_cast<StringAttr>(dyn_cast<Attribute>(operatorKey))) {
+  if (auto operatorStrAttr = dyn_cast<StringAttr>(operatorKey)) {
+    if (operatorStrAttr.getValue() != "matmul") {
+      return ::mlir::failure();
+    }
+  } else {
+    return ::mlir::failure();
+  }
+
+  LLVM_DEBUG(llvm::dbgs() << "MatmulCostModelAttr::query: operator = matmul"
+                          << "\n");
+
+  if (mode == 1) {
+    QueryableKey dimKey = context->peekKey(/*index=*/2);
+    StringRef dimStr;
+    // if (auto dimStrAttr = dyn_cast<StringAttr>(dyn_cast<Attribute>(dimKey)))
+    // {
+    if (auto dimStrAttr = dyn_cast<StringAttr>(dimKey)) {
+      dimStr = dimStrAttr.getValue();
+      if (dimStr != "M" && dimStr != "N") {
+        return ::mlir::failure();
+      }
+    } else {
+      return ::mlir::failure();
+    }
+
+    LLVM_DEBUG(llvm::dbgs()
+               << "MatmulCostModelAttr::query: dim = " << dimStr << "\n");
+
+    QueryableKey elemTypeKey = context->peekKey(/*index=*/3);
+    Type elemType;
+    if (!(elemType = dyn_cast<Type>(elemTypeKey))) {
+      return ::mlir::failure();
+    }
+
+    LLVM_DEBUG(llvm::dbgs()
+               << "MatmulCostModelAttr::query: dim = " << elemType << "\n");
+
+    QueryableKey k0 = StringAttr::get(getContext(), "CPU");
+    QueryableKey k1 = StringAttr::get(getContext(), "vector unit");
+    QueryableKey k2 = StringAttr::get(getContext(), "registers fit");
+    FailureOr<Attribute> maybeSpaceInRegisters =
+        context->query({k0, k1, k2, elemType});
+
+    LLVM_DEBUG(llvm::dbgs() << "MatmulCostModelAttr::query: before query "
+                               "for space in registers\n");
+
+    if (failed(maybeSpaceInRegisters)) {
+      LLVM_DEBUG(llvm::dbgs() << "MatmulCostModelAttr::query: query failed\n");
+      return ::mlir::failure();
+    }
+    LLVM_DEBUG(llvm::dbgs() << "MatmulCostModelAttr::query: after query "
+                               "for space in registers\n");
+
+    auto spaceInRegisters =
+        dyn_cast<IntegerAttr>(*maybeSpaceInRegisters).getInt();
+
+    Type i64 = IntegerType::get(getContext(), 64);
+    if (spaceInRegisters >= 32 && spaceInRegisters < 64) {
+      context->consumeKey();
+      context->consumeKey();
+      context->consumeKey();
+      context->consumeKey();
+      if (dimStr == "M") {
+        return IntegerAttr::get(i64, 5);
+      } else if (dimStr == "N") {
+        return IntegerAttr::get(i64, 6);
+      }
+    } else if (spaceInRegisters >= 64 && spaceInRegisters < 128) {
+      context->consumeKey();
+      context->consumeKey();
+      context->consumeKey();
+      context->consumeKey();
+      if (dimStr == "M") {
+        return IntegerAttr::get(i64, 6);
+      } else if (dimStr == "N") {
+        return IntegerAttr::get(i64, 10);
+      }
+    }
+  }
+
+  if (mode == 2) {
+    // TODO: caching tile cost model
+    return ::mlir::failure();
+  }
+
+  return ::mlir::failure();
+}
+
+FailureOr<Attribute>
+MatmulRegisterBlockingModelAttr::query(AttrQueryContext *context) {
+  LLVM_DEBUG(llvm::dbgs()
+             << "MatmulRegisterBlockingModelAttr::query: right at the start"
+             << "\n");
+  QueryableKey elemTypeKey = context->peekKey(/*index=*/0);
+  Type elemType;
+  if (!(elemType = dyn_cast<Type>(elemTypeKey)))
+    return ::mlir::failure();
+
+  MLIRContext *ctx = getContext();
+  FailureOr<Attribute> maybeSpaceInRegisters = context->query(
+      {StringAttr::get(ctx, "CPU"), StringAttr::get(ctx, "vector unit"),
+       StringAttr::get(ctx, "registers fit"), elemType});
+
+  LLVM_DEBUG(
+      llvm::dbgs() << "MatmulRegisterBlockingModelAttr::query: before query "
+                      "for space in registers\n");
+
+  if (failed(maybeSpaceInRegisters)) {
+    LLVM_DEBUG(llvm::dbgs()
+               << "MatmulRegisterBlockingModelAttr::query: query failed\n");
+    return ::mlir::failure();
+  }
+  LLVM_DEBUG(
+      llvm::dbgs() << "MatmulRegisterBlockingModelAttr::query: after query "
+                      "for space in registers\n");
+
+  auto spaceInRegisters =
+      dyn_cast<IntegerAttr>(*maybeSpaceInRegisters).getInt();
+
+  Type i64 = IntegerType::get(ctx, 64);
+  if (spaceInRegisters >= 32 && spaceInRegisters < 64) {
+    context->consumeKey();
+    return ArrayAttr::get(ctx,
+                          {IntegerAttr::get(i64, 5), IntegerAttr::get(i64, 6)});
+  } else if (spaceInRegisters >= 64 && spaceInRegisters < 128) {
+    context->consumeKey();
+    return ArrayAttr::get(
+        ctx, {IntegerAttr::get(i64, 6), IntegerAttr::get(i64, 10)});
+  }
+
+  return ::mlir::failure();
+}

@@ -21,6 +21,8 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/Support/TypeSize.h"
+#include <optional>
+#include <tuple>
 
 namespace mlir {
 class DataLayout;
@@ -39,6 +41,8 @@ using DataLayoutIdentifiedEntryMap =
     ::llvm::MapVector<::mlir::StringAttr, ::mlir::DataLayoutEntryInterface>;
 class DataLayoutOpInterface;
 class DataLayoutSpecInterface;
+class AttrQueryInterface;
+class AttrQueryContext;
 class ModuleOp;
 
 namespace detail {
@@ -303,6 +307,107 @@ private:
 
   /// Cache for stack alignment.
   mutable std::optional<uint64_t> stackAlignment;
+};
+
+using QueryableKey = DataLayoutEntryKey;
+
+inline ::llvm::hash_code hash_value(const QueryableKey &arg) {
+  return DenseMapInfo<QueryableKey>::getHashValue(arg);
+}
+
+namespace detail {
+class AttrQueryState {
+public:
+  AttrQueryState(Operation *op, ArrayRef<QueryableKey> keys)
+      : op(op), keys(keys) {}
+
+  QueryableKey peek(size_t index = 0) const {
+    if (firstRemainingKeyIndex + index < keys.size())
+      return keys[firstRemainingKeyIndex + index];
+    return nullptr;
+  }
+
+  void consume(std::optional<QueryableKey> key = std::nullopt) {
+    assert(!key.has_value() || key == keys[firstRemainingKeyIndex] &&
+                                   "key does not match the expected key");
+    firstRemainingKeyIndex++;
+  }
+
+  void reset() { firstRemainingKeyIndex = 0; }
+
+  Operation *op;
+  ArrayRef<QueryableKey> keys;
+  size_t firstRemainingKeyIndex = 0;
+};
+} // namespace detail
+
+class AttrQueryContext {
+public:
+  AttrQueryContext(bool emitErrors = false) : emitErrors(emitErrors){};
+
+  QueryableKey peekKey(size_t index = 0) { return stack.back().peek(index); }
+  QueryableKey peekKey2() { return stack.back().peek(); }
+  ArrayRef<QueryableKey> peekKeys2() { return stack.back().keys; }
+  void consumeKey(std::optional<QueryableKey> key = std::nullopt) {
+    return stack.back().consume(key);
+  }
+
+  FailureOr<Attribute> query(ArrayRef<QueryableKey> keys) {
+    assert(!stack.empty() &&
+           "cannot be called without a specified op as context");
+    return query(keys, std::nullopt);
+  };
+
+  FailureOr<Attribute> query(ArrayRef<QueryableKey> keys, Operation *op) {
+    return query(keys, std::optional{op});
+  };
+  //  FailureOr<Attribute> query(ArrayRef<QueryableKey> keys,
+  //                             std::optional<Operation *> op = std::nullopt) {
+  //    Operation *targetOp = op.value_or(stack.back().op);
+  //    stack.emplace_back(targetOp, keys);
+  //
+  //    Operation *currentOp = targetOp;
+  //    do {
+  //      auto it = cache.find(std::make_tuple(targetOp, keys));
+  //      if (it != cache.end()) {
+  //        stack.pop_back();
+  //        return it->getSecond();
+  //      }
+  //
+  //      auto maybeAttr = queryAttributesOfOp(targetOp);
+  //      if (maybeAttr == std::nullopt)
+  //        continue; // try at next ancestor
+  //      // know the result is not nullopt
+  //      if (stack.back().peek()) {
+  //        assert(false); // queryAttributesOfOp does not allow for this to
+  //        happen
+  //      }
+  //      // know there are no remaining keys
+  //      for (Operation *opToCache = targetOp; opToCache != nullptr;
+  //           opToCache = opToCache->getParentOp()) {
+  //        cache.insert(std::make_pair(std::make_tuple(opToCache, keys),
+  //                                    maybeAttr.value()));
+  //        if (opToCache == currentOp)
+  //          break;
+  //      }
+  //      stack.pop_back();
+  //      return maybeAttr.value();
+  //    } while ((currentOp = currentOp->getParentOp()));
+  //
+  //    stack.pop_back();
+  //    return failure();
+  //  };
+
+  bool emitErrors;
+
+private:
+  FailureOr<Attribute> query(ArrayRef<QueryableKey> keys,
+                             std::optional<Operation *> op = std::nullopt);
+  FailureOr<Attribute> queryAttributesOfOp(Operation *op,
+                                           InFlightDiagnostic &diag);
+
+  SmallVector<detail::AttrQueryState> stack;
+  DenseMap<std::tuple<Operation *, ArrayRef<QueryableKey>>, Attribute> cache;
 };
 
 } // namespace mlir

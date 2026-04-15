@@ -44,6 +44,13 @@ DiagnosedSilenceableFailure transform::QueryOp::applyToOne(
                                  "only StringAttr and TypeAttr are allowed");
   }
 
+  AttrQueryContext context(/*emitErrors=*/true);
+  FailureOr<Attribute> newResult = context.query(keys, target);
+  if (succeeded(newResult)) {
+    results.push_back(*newResult);
+    return DiagnosedSilenceableFailure::success();
+  }
+
   FailureOr<Attribute> result = dlti::query(target, keys, /*emitError=*/true);
 
   if (failed(result))
