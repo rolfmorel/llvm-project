@@ -10,10 +10,10 @@ add_mlir_dialect_library(MLIRTargetLLVMIRTransforms
   MC
   Target
   TargetParser
-  AllTargetsAsmParsers
-  AllTargetsCodeGens
-  AllTargetsDescs
-  AllTargetsInfos
+  #AllTargetsAsmParsers
+  #AllTargetsCodeGens
+  #AllTargetsDescs
+  #AllTargetsInfos
 
   LINK_LIBS PUBLIC
   MLIRDLTIDialect

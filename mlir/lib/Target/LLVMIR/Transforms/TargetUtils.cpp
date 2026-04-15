@@ -26,8 +26,8 @@ void initializeBackendsOnce() {
   static const auto initOnce = [] {
     // Ensure that the targets, that LLVM has been configured to support,
     // are loaded into the TargetRegistry.
-    llvm::InitializeAllTargets();
-    llvm::InitializeAllTargetMCs();
+    //llvm::InitializeAllTargets();
+    //llvm::InitializeAllTargetMCs();
     return true;
   }();
   (void)initOnce; // Dummy usage.
