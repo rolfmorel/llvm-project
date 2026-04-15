@@ -16,10 +16,11 @@ def DLTI_Dialect : Dialect {
   let cppNamespace = "::mlir";
   let hasOperationAttrVerify = 1;
 
+// TODO: description should at least link to DataLayout.md / the associated interfaces.
   let description = [{
     The Data Layout and Target Information (DLTI) dialect is intended to hold
     attributes and other components pertaining to descriptions of in-memory
-    data layout and compilation targets.
+    data layout and compilation targets and the querying thereof.
   }];
 
   let extraClassDeclaration = [{
@@ -51,7 +52,7 @@ def DLTI_Dialect : Dialect {
 
     constexpr const static ::llvm::StringLiteral
     kDataLayoutAllocaMemorySpaceKey = "dlti.alloca_memory_space";
-    
+
     constexpr const static ::llvm::StringLiteral
     kDataLayoutProgramMemorySpaceKey = "dlti.program_memory_space";
 

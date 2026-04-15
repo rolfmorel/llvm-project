@@ -18,6 +18,7 @@
 #include "mlir/Interfaces/DataLayoutInterfaces.h"
 
 namespace mlir {
+// TODO: if naming DataLayoutEntryAttrStorage here is really necessary
 namespace detail {
 class DataLayoutEntryAttrStorage;
 } // namespace detail

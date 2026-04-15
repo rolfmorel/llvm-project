@@ -1,5 +1,6 @@
-# Data Layout Modeling
+# Data Layout & Target Information Modeling
 
+// FIXME: integrate target info
 Data layout information allows the compiler to answer questions related to how a
 value of a particular type is stored in memory. For example, the size of a value
 or its address alignment requirements. It enables, among others, the generation
@@ -12,8 +13,10 @@ system. At the top level, it consists of:
 *   attribute interfaces that can be implemented by concrete data layout
     specifications;
 *   type interfaces that should be implemented by types subject to data layout;
+// TODO: should these go? Are they useful?
 *   operation interfaces that must be implemented by operations that can serve
     as data layout scopes (e.g., modules);
+//
 *   and dialect interfaces for data layout properties unrelated to specific
     types.
 

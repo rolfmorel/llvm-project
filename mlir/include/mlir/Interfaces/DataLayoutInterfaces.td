@@ -172,6 +172,7 @@ def DataLayoutSpecInterface : AttrInterface<"DataLayoutSpecInterface", [DLTIQuer
         return ::mlir::detail::filterEntriesForType($_attr.getEntries(), type);
       }]
     >,
+    // TODO: deprecate following method - just use query() instead
     // Implementations may override this if they have an efficient lookup
     // mechanism.
     InterfaceMethod<
@@ -186,6 +187,7 @@ def DataLayoutSpecInterface : AttrInterface<"DataLayoutSpecInterface", [DLTIQuer
                                                         identifier);
       }]
     >,
+    // TODO: could this just be verify()?
     InterfaceMethod<
       /*description=*/"Verifies the validity of the specification and reports "
                       "any errors at the given location.",
@@ -249,6 +251,7 @@ def TargetDeviceSpecInterface : AttrInterface<"TargetDeviceSpecInterface", [DLTI
       /*methodName=*/"getEntries",
       /*args=*/(ins)
     >,
+    // TODO: deprecate following method - just use query() instead
     InterfaceMethod<
       /*description=*/"Returns the entry related to the given identifier, if "
                       "present.",
@@ -261,6 +264,7 @@ def TargetDeviceSpecInterface : AttrInterface<"TargetDeviceSpecInterface", [DLTI
                                                         identifier);
       }]
     >,
+    // TODO: could this just be verify()?
     InterfaceMethod<
       /*description=*/"Checks that the entry is well-formed, reports errors "
                       "at the provided location.",
@@ -302,12 +306,16 @@ def TargetSystemSpecInterface : AttrInterface<"TargetSystemSpecInterface", [DLTI
   }];
 
   let methods = [
+    // TODO: should we instead have "getKeys()" and just use query(key) for each key? not as efficient
     InterfaceMethod<
       /*description=*/"Returns the list of layout entries.",
       /*retTy=*/"::llvm::ArrayRef<DataLayoutEntryInterface>",
       /*methodName=*/"getEntries",
       /*args=*/(ins)
     >,
+    // TODO: deprecate following method - just use query() instead
+    //       main question to resolve is if we can communicate the same type
+    //       guarantee somehow
     InterfaceMethod<
       /*description=*/"Returns the device description spec for given device "
                       "ID",
@@ -346,6 +354,7 @@ def TargetSystemSpecInterface : AttrInterface<"TargetSystemSpecInterface", [DLTI
 // Operation interface
 //===----------------------------------------------------------------------===//
 
+// Only implementers upstream are builtin.module and gpu.module -> just replace with a blank query() call
 def DataLayoutOpInterface : OpInterface<"DataLayoutOpInterface"> {
   let cppNamespace = "::mlir";
 

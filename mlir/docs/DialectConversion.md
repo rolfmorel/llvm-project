@@ -1,5 +1,7 @@
 # Dialect Conversion
 
+// TODO: should this doc explain the relation to DLTI?
+
 This document describes a framework in MLIR in which to perform operation
 conversions between, and within dialects. This framework allows for transforming
 illegal operations to those supported by a provided conversion target, via a set
@@ -377,7 +379,7 @@ the respective type converter callback whenever a materialization is required.
 From the perspective of type conversion, the types of block arguments are a bit
 special. Throughout the conversion process, blocks may move between regions of
 different operations. Given this, the conversion of the types for blocks must be
-done explicitly via a conversion pattern. 
+done explicitly via a conversion pattern.
 
 To convert the types of block arguments within a Region, a custom hook on the
 `ConversionPatternRewriter` must be invoked; `convertRegionTypes`. This hook

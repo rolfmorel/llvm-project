@@ -294,6 +294,7 @@ mlir::detail::getDefaultStackAlignment(DataLayoutEntryInterface entry) {
 }
 
 std::optional<Attribute>
+// WTF
 mlir::detail::getDevicePropertyValue(DataLayoutEntryInterface entry) {
   if (entry == DataLayoutEntryInterface())
     return std::nullopt;

@@ -4,6 +4,33 @@
 // CHECK-SAME:    %[[TA:[0-9a-z]+]]: tensor<?x?xf32>
 // CHECK-SAME:    %[[TB:[0-9a-z]+]]: tensor<?x?xf32>
 // CHECK-SAME:    %[[TC:[0-9a-z]+]]: tensor<?x?xf32>) -> tensor<?x?xf32> {
+func.func @matmul_tensors1(
+  %arg0: tensor<1024x1024xf32>, %arg1: tensor<1024x1024xf32>, %arg2: tensor<1024x1024xf32>)
+    -> tensor<1024x1024xf32> {
+//      CHECK: %[[TD0:.*]] = scf.for {{.*}} to {{.*}} step {{.*}} iter_args(%[[TC0:.*]] = %[[TC]]) -> (tensor<1024x1024xf32>) {
+//      CHECK:   %[[TD1:.*]] = scf.for {{.*}} to {{.*}} step {{.*}} iter_args(%[[TC1:.*]] = %[[TC0]]) -> (tensor<1024x1024xf32>) {
+//      CHECK:     %[[TD2:.*]] = scf.for {{.*}} to {{.*}} step {{.*}} iter_args(%[[TC2:.*]] = %[[TC1]]) -> (tensor<1024x1024xf32>) {
+//      CHECK:       %[[sTA:.*]] = tensor.extract_slice %[[TA]][{{.*}}] : tensor<1024x1024xf32> to tensor<1024x1024xf32>
+//      CHECK:       %[[sTB:.*]] = tensor.extract_slice %[[TB]][{{.*}}] : tensor<1024x1024xf32> to tensor<1024x1024xf32>
+//      CHECK:       %[[sTC:.*]] = tensor.extract_slice %[[TC2]][{{.*}}] : tensor<1024x1024xf32> to tensor<1024x1024xf32>
+//      CHECK:       %[[sTD:.*]] = linalg.matmul ins(%[[sTA]], %[[sTB]] : tensor<1024x1024xf32>, tensor<1024x1024xf32>)
+// CHECK-SAME:                                  outs(%[[sTC]] : tensor<1024x1024xf32>)  -> tensor<1024x1024xf32>
+//      CHECK:       %[[TD:.*]] = tensor.insert_slice %[[sTD]] into %[[TC2]][{{.*}}]  : tensor<1024x1024xf32> into tensor<1024x1024xf32>
+//      CHECK:       scf.yield %[[TD]] : tensor<1024x1024xf32>
+//      CHECK:     scf.yield %[[TD2]] : tensor<1024x1024xf32>
+//      CHECK:   scf.yield %[[TD1]] : tensor<1024x1024xf32>
+  %0 = linalg.matmul  ins(%arg0, %arg1: tensor<1024x1024xf32>, tensor<1024x1024xf32>)
+                     outs(%arg2: tensor<1024x1024xf32>)
+    -> tensor<1024x1024xf32>
+
+//      CHECK: return %[[TD0]] : tensor<1024x1024xf32>
+  return %0 : tensor<1024x1024xf32>
+}
+
+// CHECK-LABEL: func @matmul_tensors(
+// CHECK-SAME:    %[[TA:[0-9a-z]+]]: tensor<?x?xf32>
+// CHECK-SAME:    %[[TB:[0-9a-z]+]]: tensor<?x?xf32>
+// CHECK-SAME:    %[[TC:[0-9a-z]+]]: tensor<?x?xf32>) -> tensor<?x?xf32> {
 func.func @matmul_tensors(
   %arg0: tensor<?x?xf32>, %arg1: tensor<?x?xf32>, %arg2: tensor<?x?xf32>)
     -> tensor<?x?xf32> {
@@ -30,7 +57,8 @@ func.func @matmul_tensors(
 module attributes {transform.with_named_sequence} {
   transform.named_sequence @__transform_main(%arg1: !transform.any_op {transform.readonly}) {
     %0 = transform.structured.match ops{["linalg.matmul"]} in %arg1 : (!transform.any_op) -> !transform.any_op
-    %1, %loops:3 = transform.structured.tile_using_for %0 tile_sizes [2, 3, 4] : (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op)
+    %1, %loops:3 = transform.structured.tile_using_for %0 tile_sizes [32, 32, 32] : (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op, !transform.any_op)
+    %2, %loops_:2 = transform.structured.tile_using_for %1 tile_sizes [8, 8] : (!transform.any_op) -> (!transform.any_op, !transform.any_op, !transform.any_op)
     transform.yield
   }
 }
