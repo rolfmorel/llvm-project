@@ -510,6 +510,144 @@ def Builtin_DenseResourceElementsAttr : Builtin_Attr<"DenseResourceElements",
 }
 
 //===----------------------------------------------------------------------===//
+// DenseNormallyDistributedAttr
+//===----------------------------------------------------------------------===//
+
+def Builtin_DenseNormallyDistributedAttr : Builtin_Attr<
+    "DenseNormallyDistributed", "normal", [ElementsAttrInterface],
+    "DenseElementsAttr"
+  > {
+  let summary = "An Attribute containing a dense multi-dimensional array of "
+                "normally distributed floating-point values";
+  let description = [{
+    TODO
+
+    Syntax:
+
+    ```
+    tensor-literal ::= integer-literal | float-literal | bool-literal | [] | [tensor-literal (, tensor-literal)* ]
+    dense-intorfloat-elements-attribute ::= `dense` `<` tensor-literal `>` `:`
+                                            ( tensor-type | vector-type )
+    ```
+
+    A dense int-or-float elements attribute is an elements attribute containing
+    a densely packed vector or tensor of integer or floating-point values. The
+    element type of this attribute is required to be either an `IntegerType` or
+    a `FloatType`.
+
+    Examples:
+
+    ```
+    // A splat tensor of integer values.
+    dense<10> : tensor<2xi32>
+    // A tensor of 2 float32 elements.
+    dense<[10.0, 11.0]> : tensor<2xf32>
+    ```
+  }];
+  let parameters = (ins AttributeSelfTypeParameter<"", "ShapedType">:$type,
+                        DefaultValuedParameter<"APFloat", "0.0">:$mean,
+                        DefaultValuedParameter<"APFloat", "0.0">:$std_deviation,
+                        "IntegerAttr":$seed);
+  let extraClassDeclaration = [{
+    using DenseElementsAttr::empty;
+    using DenseElementsAttr::getNumElements;
+    using DenseElementsAttr::getElementType;
+    using DenseElementsAttr::getValues;
+    using DenseElementsAttr::isSplat;
+    using DenseElementsAttr::size;
+    using DenseElementsAttr::value_begin;
+
+    /// The set of data types that can be iterated by this attribute.
+    using ContiguousIterableTypesT = std::tuple<
+      // Float types.
+      float, double,
+      // Complext type are left TODO:
+      // std::complex<float>, std::complex<double>
+    >;
+    using NonContiguousIterableTypesT = std::tuple<
+      Attribute,
+      // Float types.
+      APFloat,
+      // TODO: std::complex<APFloat>
+    >;
+
+    /// Provide a `try_value_begin_impl` to enable iteration within
+    /// ElementsAttr.
+    template <typename T>
+    auto try_value_begin_impl(OverloadToken<T>) const {
+      return try_value_begin<T>();
+    }
+
+    /// Convert endianess of input ArrayRef for big-endian(BE) machines. All of
+    /// the elements of `inRawData` has `type`. If `inRawData` is little endian
+    /// (LE), it is converted to big endian (BE). Conversely, if `inRawData` is
+    /// BE, converted to LE.
+    static void
+    convertEndianOfArrayRefForBEmachine(ArrayRef<char> inRawData,
+                                        MutableArrayRef<char> outRawData,
+                                        ShapedType type);
+
+    /// Convert endianess of input for big-endian(BE) machines. The number of
+    /// elements of `inRawData` is `numElements`, and each element has
+    /// `elementBitWidth` bits. If `inRawData` is little endian (LE), it is
+    /// converted to big endian (BE) and saved in `outRawData`. Conversely, if
+    /// `inRawData` is BE, converted to LE.
+    static void convertEndianOfCharForBEmachine(const char *inRawData,
+                                                char *outRawData,
+                                                size_t elementBitWidth,
+                                                size_t numElements);
+
+  protected:
+    friend DenseElementsAttr;
+
+    /// Constructs a dense elements attribute from an array of raw APFloat
+    /// values. Each APFloat value is expected to have the same bitwidth as the
+    /// element type of 'type'. 'type' must be a vector or tensor with static
+    /// shape.
+    ///
+    /// If the `values` array only has a single element, then this constructs
+    /// splat of that value.
+    static DenseElementsAttr getRaw(ShapedType type, size_t storageWidth,
+                                    ArrayRef<APFloat> values);
+
+    /// Constructs a dense elements attribute from an array of raw APInt values.
+    /// Each APInt value is expected to have the same bitwidth as the element
+    /// type of 'type'. 'type' must be a vector or tensor with static shape.
+    ///
+    /// If the `values` array only has a single element, then this constructs
+    /// splat of that value.
+    static DenseElementsAttr getRaw(ShapedType type, size_t storageWidth,
+                                    ArrayRef<APInt> values);
+
+    /// Get or create a new dense elements attribute instance with the given raw
+    /// data buffer. 'type' must be a vector or tensor with static shape.
+    ///
+    /// If the `values` array only has a single element, then this constructs
+    /// splat of that value.
+    static DenseElementsAttr getRaw(ShapedType type, ArrayRef<char> data);
+
+    /// Overload of the raw 'get' method that asserts that the given type is of
+    /// complex type. This method is used to verify type invariants that the
+    /// templatized 'get' method cannot.
+    static DenseElementsAttr getRawComplex(ShapedType type, ArrayRef<char> data,
+                                           int64_t dataEltSize, bool isInt,
+                                           bool isSigned);
+
+    /// Overload of the raw 'get' method that asserts that the given type is of
+    /// integer or floating-point type. This method is used to verify type
+    /// invariants that the templatized 'get' method cannot.
+    static DenseElementsAttr getRawIntOrFloat(ShapedType type,
+                                              ArrayRef<char> data,
+                                              int64_t dataEltSize, bool isInt,
+                                              bool isSigned);
+  public:
+  }];
+  let genAccessors = 0;
+  let genStorageClass = 0;
+  let skipDefaultBuilders = 1;
+}
+
+//===----------------------------------------------------------------------===//
 // DictionaryAttr
 //===----------------------------------------------------------------------===//
 
